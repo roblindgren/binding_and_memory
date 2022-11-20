@@ -1,12 +1,3 @@
-'''
-TO DO:
-    - Sort out the role of self.num_layers in h_0 and c_0, I don't think it's right.
-        I think it really only applies to the LSTM stacked layers.
-    - FIgure out, what is a really, truly simple version of this task for an LSTM. Can we do with it just integers instead of
-         "images"?
-
-'''
-
 import gen_exp_val
 from gen_exp_val import expBuilderTest
 import torch
@@ -169,24 +160,6 @@ def train_raytune(config, LSTM1, input_size, seq_len, train_dataset, test_datase
         test_loss_epoch = running_test_loss/len(test_loader)
         train_acc_epoch = (running_train_acc)/train_n
         test_acc_epoch = (running_test_acc)/test_n
-        
-        '''
-        print("Epoch: %d, train loss: %1.5f, test loss: %1.5f, train acc: %1.5f, test acc: %1.5f" % (epoch, train_loss_epoch, test_loss_epoch, train_acc_epoch, test_acc_epoch)) 
-
-        save_obj['epoch'].append(epoch)
-        save_obj['train loss'].append(train_loss_epoch)
-        save_obj['train accuracy'].append(train_acc_epoch)
-        save_obj['test loss'].append(test_loss_epoch)
-        save_obj['test accuracy'].append(test_acc_epoch)
-
-        if test_acc_epoch > best_acc: 
-            saveModel(lstm1)
-            best_acc = test_acc_epoch 
-
-        if epoch % 100 == 0:
-            with open('tests/results/test_lstm_exp.pickle', 'wb') as handle:
-                pickle.dump(save_obj, handle, protocol=pickle.HIGHEST_PROTOCOL)
-        '''
 
         with tune.checkpoint_dir(epoch) as checkpoint_dir:
             path = os.path.join(checkpoint_dir, "checkpoint")
@@ -269,23 +242,6 @@ def main():
     
     best_trained_model = LSTM1(num_classes, input_size, best_trial.config['hidden_size'], best_trial.config['num_layers'], seq_len)
     saveModel(best_trained_model, 'tests/models/test_lstm_exp_raytune.pt')
-    
-    '''
-    device = "cpu"
-    if torch.cuda.is_available():
-        device = "cuda:0"
-        if gpus_per_trial > 1:
-            best_trained_model = nn.DataParallel(best_trained_model)
-    best_trained_model.to(device)
-
-    best_checkpoint_dir = best_trial.checkpoint.value
-    model_state, optimizer_state = torch.load(os.path.join(
-        best_checkpoint_dir, "checkpoint"))
-    best_trained_model.load_state_dict(model_state)
-
-    test_acc = test_accuracy(best_trained_model, device)
-    print("Best trial test set accuracy: {}".format(test_acc))
-    '''
 
 if __name__ == "__main__":
     main()
