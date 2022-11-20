@@ -108,7 +108,7 @@ class expBuilderTest:
         y_train_seq = []
         for idx in range(len(y_train)-self.seq_len+1):            
             X_train_seq.append(X_train[idx:idx+self.seq_len])
-            y_train_seq.append(y_train[idx+self.seq_len-1])
+            y_train_seq.append(y_train[idx:idx+self.seq_len])
         
         X_test = [0] * len(y_test)
         for idx in range(len(y_test)):
@@ -126,6 +126,6 @@ class expBuilderTest:
         y_test_seq = []
         for idx in range(len(y_test)-self.seq_len+1):            
             X_test_seq.append(X_test[idx:idx+self.seq_len])
-            y_test_seq.append(y_test[idx+self.seq_len-1])
+            y_test_seq.append(y_test[idx:idx+self.seq_len])
 
         return X_train_seq, y_train_seq, X_test_seq, y_test_seq

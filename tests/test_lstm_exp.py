@@ -16,12 +16,19 @@ from torch.autograd import Variable
 import numpy as np
 import pickle
 
+# For raytune
+import torchvision
+import torchvision.transforms as transforms
+from ray import tune
+from ray.tune import CLIReporter
+from ray.tune.schedulers import ASHAScheduler
+
 # Create experiment
 seq_len = 100
 img_size = 12
 max_n_imgs = 2**img_size - 1
 exp_generator = expBuilderTest(img_size = img_size, n_imgs = max_n_imgs, exp_size = max_n_imgs,
-                                seq_len = seq_len, n_initial_view = 1, n_back = 2, p = 0.5 )
+                                seq_len = seq_len, n_initial_view = 1, n_back = 1, p = 0.5 )
 
 X_train, y_train, X_test, y_test = exp_generator.build_exp()
 
@@ -43,8 +50,10 @@ y_test_tensors_final = torch.reshape(y_test_tensors, (y_test_tensors.shape[0], 1
 '''
 X_train_tensors_final = X_train_tensors
 X_test_tensors_final = X_test_tensors
-y_train_tensors_final = torch.reshape(y_train_tensors, (y_train_tensors.shape[0], 1))
-y_test_tensors_final = torch.reshape(y_test_tensors, (y_test_tensors.shape[0], 1)) 
+y_train_tensors_final = y_train_tensors
+y_test_tensors_final = y_test_tensors
+#y_train_tensors_final = torch.reshape(y_train_tensors, (y_train_tensors.shape[0], 1))
+#y_test_tensors_final = torch.reshape(y_test_tensors, (y_test_tensors.shape[0], 1)) 
 
 print("Training Shape", X_train_tensors_final.shape, y_train_tensors_final.shape)
 print("Testing Shape", X_test_tensors_final.shape, y_test_tensors_final.shape) 
@@ -66,9 +75,10 @@ class LSTM1(nn.Module):
 
         self.lstm = nn.LSTM(input_size=input_size, hidden_size=hidden_size,
                           num_layers=num_layers, batch_first=True) #lstm
-        self.fc_1 =  nn.Linear(hidden_size, 128) #fully connected 1
-        self.relu = nn.ReLU()
-        self.fc = nn.Linear(128, num_classes) #fully connected last layer
+        #self.fc_1 =  nn.Linear(hidden_size, 128) #fully connected 1
+        #self.relu = nn.ReLU()
+        #self.fc = nn.Linear(128, seq_length) #fully connected last layer
+        self.fc = nn.Linear(hidden_size, seq_length) #fully connected last layer
     
     def forward(self,x):
         h_0 = Variable(torch.zeros(self.num_layers, x.size(0), self.hidden_size)) #hidden state
@@ -77,40 +87,37 @@ class LSTM1(nn.Module):
         output, (hn, cn) = self.lstm(x, (h_0, c_0)) #lstm with input, hidden, and internal state
         #print('hn shape:', hn.shape)
         #print('output shape:', output.shape)
-        output = output[:, -1, :]
+        #output = output[:, -1, :]
+        out = output[:, -1, :]
         #print('output reshaped:', output.shape)
         hn = hn.view(-1, self.hidden_size) #reshaping the data for Dense layer next
         #print('hn shape:', hn.shape)
-        out = self.relu(output)
+        #out = self.relu(output)
         #print('relu shape:', out.shape)
-        out = self.fc_1(out) #first Dense
+        #out = self.fc_1(out) #first Dense
         #print('fc_1 shape:', out.shape)
-        out = self.relu(out) #relu
+        #out = self.relu(out) #relu
         #print('relu again shape:', out.shape)
         out = self.fc(out) #Final Output
         #print('final fc shape:', out.shape)
         return out
 
-num_epochs = 100
-learning_rate = 0.01 
-gamma = 0.999
-# best performance so far was with learning_rate == 0.01 and gamma == 0.999, 50 hidden units and 1 layer
-# Just over 82.68% test accuracy and 0.27 loss on both train and test
-# Keep making the model bigger, try to overfit training then optimize
-
-# NEVER MIND my training data was in my test_loader :(
+num_epochs = 2000
+learning_rate = 0.01
+#gamma = None
+gamma = 0.992
 
 input_size = img_size #number of features
-hidden_size = 200 #number of features in hidden state
-num_layers = 1 #number of stacked lstm layers
-# Note: I tried 10 layers and that reeeeeeally slowed down the increase in accuracy
+hidden_size = 30 #number of features in hidden state
+num_layers = 2 #number of stacked lstm layers
  
 num_classes = 1 #number of output classes 
 
 # Instantiate the LSTM
 lstm1 = LSTM1(num_classes, input_size, hidden_size, num_layers, X_train_tensors_final.shape[1]) #our lstm class 
 
-loss_fn = nn.BCEWithLogitsLoss()
+#loss_fn = nn.BCEWithLogitsLoss()
+loss_fn = nn.MultiLabelSoftMarginLoss()
 optimizer = torch.optim.Adam(lstm1.parameters(), lr=learning_rate)
 scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=gamma, verbose=True)
 
@@ -118,7 +125,7 @@ def binary_acc(y_pred, y_test):
     y_pred_tag = torch.round(torch.sigmoid(y_pred))
 
     correct_results_sum = (y_pred_tag == y_test).sum().float()
-    acc = correct_results_sum/y_test.shape[0]
+    acc = correct_results_sum/(y_test.shape[0]*y_test.shape[1])
     acc = torch.round(acc * 100)
     
     return acc
@@ -135,7 +142,7 @@ save_obj = {'epoch' : [],
             'train accuracy' : [],
             'test accuracy' : [],
             'learning rate' : learning_rate,
-            'gamma' : gamma,
+            'gamma' : gamma if gamma else None,
             'hidden size' : hidden_size,
             'num_layers' : num_layers}
 for epoch in range(num_epochs):
@@ -191,9 +198,8 @@ for epoch in range(num_epochs):
         best_acc = test_acc_epoch 
 
     if epoch % 100 == 0:
-        save_dict = {}
         with open('tests/results/test_lstm_exp.pickle', 'wb') as handle:
-            pickle.dump(save_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
+            pickle.dump(save_obj, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
 print('\n')
 print('Best accuracy:', best_acc)
