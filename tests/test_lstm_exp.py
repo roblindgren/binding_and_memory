@@ -1,12 +1,3 @@
-'''
-TO DO:
-    - Sort out the role of self.num_layers in h_0 and c_0, I don't think it's right.
-        I think it really only applies to the LSTM stacked layers.
-    - FIgure out, what is a really, truly simple version of this task for an LSTM. Can we do with it just integers instead of
-         "images"?
-
-'''
-
 import gen_exp
 from gen_exp import expBuilderTest
 import torch
